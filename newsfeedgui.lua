@@ -140,7 +140,12 @@ function NewsFeedGui:make_news_request(push)
 			self._next = true
 		end
 		
-		self._panel:child("title_announcement"):set_visible(#self._titles > 0 or self._news.i > 0)
+		local current_server = 0
+		if self._news then
+			current_server = self._news.i
+		end
+		
+		self._panel:child("title_announcement"):set_visible(#self._titles > 0 or current_server > 0)
 	end
 	
 	managers.network.matchmake:register_callback("search_lobby", f)
