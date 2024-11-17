@@ -1,0 +1,17 @@
+{
+	"name": "Quickplay Lite",
+	"description": "",
+	"author": "James",
+	"version": "0",
+	"hooks": [
+		{"hook_id": "lib/managers/menu/newsfeedgui", "script_path": "newsfeedgui.lua"}
+	],
+	"updates" : [
+		{
+			"identifier" : "Quickplay-Lite",
+			"host": {
+				"meta": "https://raw.githubusercontent.com/Jamemes/Quickplay-Lite/meta/meta.json"
+			}
+		}
+	]
+}
