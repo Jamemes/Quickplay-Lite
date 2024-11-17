@@ -6,6 +6,7 @@ function NewsFeedGui:update(t, dt)
 	end
 	if self._news then
 		local color = math.lerp(tweak_data.screen_colors.button_stage_2, tweak_data.screen_colors.button_stage_3, (1 + math.sin(t * 360)) / 2)
+		self._panel:child("title_announcement"):set_visible(#self._titles > 0 or self._news.i > 0)
 		self._panel:child("title_announcement"):set_text(string.format("%s (%s/%s)", managers.localization:to_upper_text("cn_menu_num_players_offline"), self._news.i, #self._titles))
 		self._title_panel:child("title"):set_color(self._mouse_over and tweak_data.screen_colors.button_stage_2 or color)
 		if self._next then
@@ -139,13 +140,6 @@ function NewsFeedGui:make_news_request(push)
 			self._news = {i = 0}
 			self._next = true
 		end
-		
-		local current_server = 0
-		if self._news then
-			current_server = self._news.i
-		end
-		
-		self._panel:child("title_announcement"):set_visible(#self._titles > 0 or current_server > 0)
 	end
 	
 	managers.network.matchmake:register_callback("search_lobby", f)
