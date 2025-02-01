@@ -1,21 +1,23 @@
 NewsFeedGui.MAX_NEWS = 50
 NewsFeedGui.SUSTAIN_TIME = 7
 function NewsFeedGui:update(t, dt)
-	if not self._titles then
+	if not self._lobbies then
 		return
 	end
 	if self._news then
 		local color = math.lerp(tweak_data.screen_colors.button_stage_2, tweak_data.screen_colors.button_stage_3, (1 + math.sin(t * 360)) / 2)
-		self._panel:child("title_announcement"):set_visible(#self._titles > 0 or self._news.i > 0)
-		self._panel:child("title_announcement"):set_text(string.format("%s (%s/%s)", managers.localization:to_upper_text("cn_menu_num_players_offline"), self._news.i, #self._titles))
+		self._panel:child("title_announcement"):set_visible(#self._lobbies > 0 or self._news.i > 0)
+		self._panel:child("title_announcement"):set_text(string.format("%s (%s/%s)", managers.localization:to_upper_text("cn_menu_num_players_offline"), self._news.i, #self._lobbies))
 		self._title_panel:child("title"):set_color(self._mouse_over and tweak_data.screen_colors.button_stage_2 or color)
 		if self._next then
 			self._next = nil
 			self._news.i = self._news.i + 1
-			if self._news.i > #self._titles then
-				self._news.i = #self._titles > 0 and 1 or 0
+			if self._news.i > #self._lobbies then
+				self._news.i = #self._lobbies > 0 and 1 or 0
 			end
-			self._title_panel:child("title"):set_text(utf8.to_upper(self._titles[self._news.i]))
+
+			local title_panel_text = string.format("%s\n%s\n%s [%s/4]\n%s", self._lobbies[self._news.i].owner_name, self._lobbies[self._news.i].job_name, self._lobbies[self._news.i].state_name, self._lobbies[self._news.i].num_plrs, self._lobbies[self._news.i].difficulty)
+			self._title_panel:child("title"):set_text(utf8.to_upper(title_panel_text))
 			local _, _, w, h = self._title_panel:child("title"):text_rect()
 			self._title_panel:child("title"):set_h(h)
 			self._title_panel:set_w(w + 10)
@@ -30,8 +32,8 @@ function NewsFeedGui:update(t, dt)
 				self._title_panel:set_left(0)
 				self._present_t = nil
 				
-				local no_lobbies = #self._titles == 0 and self._news.i > 0
-				local new_lobbies = #self._titles > 0 and self._news.i == 0
+				local no_lobbies = #self._lobbies == 0 and self._news.i > 0
+				local new_lobbies = #self._lobbies > 0 and self._news.i == 0
 				local sustain = no_lobbies and 0 or new_lobbies and 0 or self.SUSTAIN_TIME
 				self._sustain_t = t + sustain
 			end
@@ -114,34 +116,47 @@ function NewsFeedGui:make_news_request(push)
 		local room_list = info.room_list
 		local attribute_list = info.attribute_list
 		
-		local game_list = {}
-		local join_ids = {}
-		
+		local lobbies = {}
 		for i, room in ipairs(room_list) do
 			local attributes_numbers = attribute_list[i].numbers
 			local job_id = tweak_data.narrative:get_job_name_from_index(math.floor(attributes_numbers[1] / 1000))
-			local difficulty = tweak_data:index_to_difficulty(attributes_numbers[2])
 			local state_string_id = tweak_data:index_to_server_state(attributes_numbers[4])
 			local state_name = state_string_id and managers.localization:text("menu_lobby_server_state_" .. state_string_id) or "UNKNOWN"
 			local num_plrs = attributes_numbers[5]
-			
 			local job_tweak = job_id and tweak_data.narrative:job_data(job_id)
 			local is_professional = job_tweak and job_tweak.professional
 			local prof = is_professional and string.format(" (%s)", managers.localization:to_upper_text("cn_menu_pro_job")) or ""
-			
-			game_list[i] = string.format("%s\n%s\n%s [%s/4]\n%s", tostring(room.owner_name), job_tweak and managers.localization:to_upper_text(job_tweak.name_id) .. prof or "", state_name, num_plrs, attributes_numbers[2] - 2 > 0 and string.rep("", attributes_numbers[2] - 2) or "")
-			join_ids[i] = tostring(room.room_id)
+	
+			lobbies[i] = {
+				room_id = tostring(room.room_id),
+				owner_name = tostring(room.owner_name),
+				job_name = job_tweak and managers.localization:to_upper_text(job_tweak.name_id) .. prof or "",
+				difficulty = attributes_numbers[2] - 2 > 0 and string.rep("", attributes_numbers[2] - 2) or "",
+				state_name = state_name,
+				num_plrs = num_plrs
+			}
 		end
-
-		self._titles = game_list
-		self._links = join_ids
+		
+		local function shuffle(t)
+			for i = 1, #t - 1 do
+				local swap_index = math.random(i, #t)
+				local temp = t[i]
+				t[i] = t[swap_index]
+				t[swap_index] = temp
+			end
+			return t
+		end
+		
+		self._lobbies = shuffle(lobbies)
 
 		if not push then
 			self._news = {i = 0}
 			self._next = true
 		end
 	end
-	
+
+	managers.network.matchmake:set_distance_filter(3)
+	managers.network.matchmake:set_lobby_return_count(50)
 	managers.network.matchmake:register_callback("search_lobby", f)
 	managers.network.matchmake:search_lobby()
 end
@@ -151,8 +166,34 @@ function NewsFeedGui:mouse_pressed(button, x, y)
 		return
 	end
 	if button == Idstring("0") and self._title_panel:inside(x, y) then
-		if self._links[self._news.i] then
-			managers.network.matchmake:join_server_with_check(self._links[self._news.i])
+		if self._lobbies[self._news.i] then
+			managers.network.matchmake:join_server_with_check(self._lobbies[self._news.i].room_id)
+		end
+		return true
+	elseif button == Idstring("1") and self._title_panel:inside(x, y) then
+		if self._lobbies then
+			local num_lobbies = #self._lobbies
+			for i, lobby in pairs(self._lobbies) do
+				local dialog_data = {
+					id = "quick_lobby_dialog" .. i,
+					text = string.format("%s\n%s\n%s [%s/4]\n%s", lobby.owner_name, lobby.job_name, lobby.state_name, lobby.num_plrs, lobby.difficulty)
+				}
+				local join_button = {text = managers.localization:text("cn_menu_accept_contract"), callback_func = function()
+					managers.system_menu:force_close_all()
+					managers.network.matchmake:join_server_with_check(lobby.room_id)
+				end}
+				local ok_button = {text = managers.localization:text("menu_back"), cancel_button = true}
+				local cancel_all = {text = managers.localization:text("dialog_cancel"), callback_func = function()
+					managers.system_menu:force_close_all()
+				end}
+				dialog_data.button_list = {
+					join_button,
+					{},
+					ok_button,
+					cancel_all
+				}
+				managers.system_menu:show(dialog_data)
+			end
 		end
 		return true
 	end
