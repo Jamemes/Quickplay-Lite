@@ -1,5 +1,33 @@
 NewsFeedGui.MAX_NEWS = 50
 NewsFeedGui.SUSTAIN_TIME = 7
+
+Hooks:Add("LocalizationManagerPostInit", "Quickplay_Lite_loc", function(...)
+	LocalizationManager:add_localized_strings({
+		LMB = "[LMB]",
+		RMB = "[RMB]",
+		qpl_join = "Join",
+		qpl_show_all = "Show all lobbies",
+	})
+	
+	if Idstring("russian"):key() == SystemInfo:language():key() then
+		LocalizationManager:add_localized_strings({
+			LMB = "[ЛКМ]",
+			RMB = "[ПКМ]",
+			qpl_join = "Присоединится",
+			qpl_show_all = "Показать все лобби",
+		})
+	end
+end)
+
+local function make_fine_text(text)
+	local x, y, w, h = text:text_rect()
+
+	text:set_size(w, h)
+	text:set_position(math.round(text:x()), math.round(text:y()))
+
+	return x, y, w, h
+end
+
 function NewsFeedGui:update(t, dt)
 	if not self._lobbies then
 		return
@@ -8,6 +36,10 @@ function NewsFeedGui:update(t, dt)
 		local color = math.lerp(tweak_data.screen_colors.button_stage_2, tweak_data.screen_colors.button_stage_3, (1 + math.sin(t * 360)) / 2)
 		self._panel:child("title_announcement"):set_visible(#self._lobbies > 0 or self._news.i > 0)
 		self._panel:child("title_announcement"):set_text(string.format("%s (%s/%s)", managers.localization:to_upper_text("cn_menu_num_players_offline"), self._news.i, #self._lobbies))
+		make_fine_text(self._panel:child("title_announcement"))
+		self._panel:child("announcement_legend"):set_visible(self._panel:child("title_announcement"):visible())
+		self._panel:child("announcement_legend"):set_text(string.format("%s %s\n%s %s", managers.localization:text("LMB"), managers.localization:text("qpl_join"), managers.localization:text("RMB"), managers.localization:text("qpl_show_all")))
+		self._panel:child("announcement_legend"):set_left(self._panel:child("title_announcement"):right() + 10)
 		self._title_panel:child("title"):set_color(self._mouse_over and tweak_data.screen_colors.button_stage_2 or color)
 		if self._next then
 			self._next = nil
@@ -15,8 +47,22 @@ function NewsFeedGui:update(t, dt)
 			if self._news.i > #self._lobbies then
 				self._news.i = #self._lobbies > 0 and 1 or 0
 			end
-
-			local title_panel_text = string.format("%s\n%s\n%s [%s/4]\n%s", self._lobbies[self._news.i].owner_name, self._lobbies[self._news.i].job_name, self._lobbies[self._news.i].state_name, self._lobbies[self._news.i].num_plrs, self._lobbies[self._news.i].difficulty)
+			
+			local function formating(str)
+				if str ~= "" then
+					return str .. "\n"
+				else
+					return ""
+				end
+				
+			end
+			
+			local owner_name = formating(self._lobbies[self._news.i].owner_name)
+			local job_name = formating(self._lobbies[self._news.i].job_name)
+			local state_name = formating(self._lobbies[self._news.i].state_name)
+			local num_plrs = string.format("[%s/4]\n", self._lobbies[self._news.i].num_plrs)
+			local difficulty = formating(self._lobbies[self._news.i].difficulty)
+			local title_panel_text = owner_name .. job_name .. state_name .. num_plrs .. difficulty
 			self._title_panel:child("title"):set_text(utf8.to_upper(title_panel_text))
 			local _, _, w, h = self._title_panel:child("title"):text_rect()
 			self._title_panel:child("title"):set_h(h)
@@ -71,6 +117,7 @@ function NewsFeedGui:_create_gui()
 		w = self._panel:w(),
 		h = self._panel:h()
 	})
+	
 	self._panel:text({
 		visible = false,
 		rotation = 360,
@@ -84,6 +131,21 @@ function NewsFeedGui:_create_gui()
 		hvertical = "top",
 		color = Color.white
 	})
+	
+	self._panel:text({
+		visible = false,
+		rotation = 360,
+		name = "announcement_legend",
+		text = "",
+		font = tweak_data.menu.pd2_small_font,
+		font_size = tweak_data.menu.pd2_small_font_size / 1.5,
+		align = "left",
+		halign = "left",
+		vertical = "top",
+		hvertical = "top",
+		color = Color.white:with_alpha(0.5)
+	})
+	
 	self._title_panel = self._panel:panel({
 		name = "title_panel",
 		layer = 1
